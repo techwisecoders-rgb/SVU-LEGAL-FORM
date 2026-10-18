@@ -1,0 +1,385 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../apps/api/src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  email              String              @unique
+  passwordHash       String
+  role               String              @default("CUSTOMER")
+  emailVerifiedAt    DateTime?
+  isSuspended        Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  sessions           Session[]
+  tokens             VerificationToken[]
+  assessments        PropertyAssessment[]
+  bookings           BookingRequest[]
+  disputes           DisputeCase[]
+  documents          Document[]
+  payments           Payment[]
+  invoices           Invoice[]
+  caseMessages       CaseMessage[]
+  savedArticles      SavedArticle[]
+  auditLogs          AuditLog[]
+  createdCaseMilestones CaseMilestone[] @relation("CreatedCaseMilestones")
+  caseStatusEvents CaseStatusEvent[] @relation("CaseStatusEventActor")
+  assignedCases      DisputeCase[]        @relation("AssignedReviewer")
+  assignedAssessments PropertyAssessment[] @relation("AssignedAssessmentReviewer")
+  @@index([role, isSuspended])
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique
+  userId    String   @db.Uuid
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, expiresAt])
+}
+
+model VerificationToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique
+  purpose   String
+  userId    String   @db.Uuid
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, purpose, expiresAt])
+}
+
+model ContactEnquiry {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  email     String
+  topic     String   @default("General")
+  message   String
+  status    String   @default("NEW")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([email, createdAt])
+  @@index([status, createdAt])
+}
+
+model PropertyAssessment {
+  id            String   @id @default(uuid()) @db.Uuid
+  reference     String   @unique @default(cuid())
+  userId        String?  @db.Uuid
+  assignedReviewerId String? @db.Uuid
+  propertyType  String
+  state         String
+  district      String
+  locality      String?
+  surveyNumber  String?
+  area          String?
+  transactionType String?
+  email         String
+  phone         String?
+  details       String
+  status        String   @default("SUBMITTED")
+  reviewerNotes String?
+  reportNotes   String?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  assignedReviewer User? @relation("AssignedAssessmentReviewer", fields: [assignedReviewerId], references: [id], onDelete: SetNull)
+  documents     Document[]
+  checks        AssessmentCheck[]
+  @@index([status, createdAt])
+  @@index([email, createdAt])
+  @@index([userId, createdAt])
+}
+
+model AssessmentCheck {
+  id                    String   @id @default(uuid()) @db.Uuid
+  assessmentId          String   @db.Uuid
+  title                 String
+  status                String   @default("NOT_STARTED")
+  informationReviewed   String?
+  source                String?
+  sourceDate             DateTime?
+  findings              String?
+  unresolvedIssues      String?
+  missingDocuments      String?
+  recommendedNextSteps  String?
+  reviewerId            String?  @db.Uuid
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  assessment             PropertyAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  @@index([assessmentId, status])
+}
+
+model ServiceCatalog {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  category    String   @default("CONSULTATION")
+  description String
+  feePaise    Int      @default(0)
+  durationMin Int      @default(30)
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  bookings    BookingRequest[]
+  @@index([isActive, category])
+}
+
+model AvailabilitySlot {
+  id          String   @id @default(uuid()) @db.Uuid
+  startsAt    DateTime
+  endsAt      DateTime
+  serviceSlug String?
+  isActive    Boolean  @default(true)
+  isBooked    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  booking     BookingRequest?
+  @@index([isActive, isBooked, startsAt])
+}
+
+model BookingRequest {
+  id                 String   @id @default(uuid()) @db.Uuid
+  reference          String   @unique @default(cuid())
+  userId             String?  @db.Uuid
+  service            String
+  serviceCatalogId   String?  @db.Uuid
+  slotId             String?  @unique @db.Uuid
+  preferredDate      DateTime?
+  consultationMethod String?
+  name               String
+  email              String
+  details            String
+  amountPaise        Int      @default(0)
+  currency            String   @default("INR")
+  paymentStatus      String   @default("NOT_REQUIRED")
+  status             String   @default("REQUESTED")
+  cancellationReason String?
+  cancelledAt        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  serviceCatalog     ServiceCatalog? @relation(fields: [serviceCatalogId], references: [id], onDelete: SetNull)
+  slot               AvailabilitySlot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  documents          Document[]
+  payments           Payment[]
+  invoices           Invoice[]
+  @@index([status, preferredDate])
+  @@index([email, createdAt])
+  @@index([userId, createdAt])
+}
+
+model DisputeCase {
+  id                  String   @id @default(uuid()) @db.Uuid
+  reference           String   @unique @default(cuid())
+  userId              String?  @db.Uuid
+  assignedReviewerId  String?  @db.Uuid
+  category            String
+  state               String
+  opposingParty       String
+  arbitrationAgreement String?
+  deadline            String?
+  applicantName       String
+  email               String
+  statement           String
+  reliefSought        String?
+  agreementDetails    String?
+  status              String   @default("SUBMITTED")
+  feePaise            Int      @default(0)
+  paymentStatus       String   @default("NOT_REQUIRED")
+  reviewerNotes       String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  assignedReviewer    User?    @relation("AssignedReviewer", fields: [assignedReviewerId], references: [id], onDelete: SetNull)
+  documents           Document[]
+  messages            CaseMessage[]
+  milestones          CaseMilestone[]
+  statusEvents        CaseStatusEvent[]
+  payments            Payment[]
+  @@index([status, createdAt])
+  @@index([email, createdAt])
+  @@index([userId, createdAt])
+  @@index([assignedReviewerId, status])
+}
+
+model CaseStatusEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  disputeCaseId String   @db.Uuid
+  fromStatus    String?
+  toStatus      String
+  actorId       String?  @db.Uuid
+  note          String?
+  createdAt     DateTime @default(now())
+  disputeCase   DisputeCase @relation(fields: [disputeCaseId], references: [id], onDelete: Cascade)
+  actor         User?    @relation("CaseStatusEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  @@index([disputeCaseId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model CaseMilestone {
+  id            String   @id @default(uuid()) @db.Uuid
+  disputeCaseId String   @db.Uuid
+  title         String
+  description   String?
+  dueAt         DateTime?
+  completedAt   DateTime?
+  status        String   @default("PLANNED")
+  createdById   String?  @db.Uuid
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  disputeCase   DisputeCase @relation(fields: [disputeCaseId], references: [id], onDelete: Cascade)
+  createdBy     User?    @relation("CreatedCaseMilestones", fields: [createdById], references: [id], onDelete: SetNull)
+  @@index([disputeCaseId, status, dueAt])
+  @@index([createdById, createdAt])
+}
+
+model Document {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid
+  assessmentId    String?  @db.Uuid
+  disputeCaseId   String?  @db.Uuid
+  bookingId       String?  @db.Uuid
+  originalName    String
+  storedName      String   @unique
+  mimeType        String
+  sizeBytes       Int
+  sha256          String
+  accessLevel     String   @default("OWNER_AND_ASSIGNED_STAFF")
+  createdAt       DateTime @default(now())
+  deletedAt       DateTime?
+  user            User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  assessment      PropertyAssessment? @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
+  disputeCase     DisputeCase? @relation(fields: [disputeCaseId], references: [id], onDelete: SetNull)
+  booking         BookingRequest? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  @@index([userId, createdAt])
+  @@index([assessmentId])
+  @@index([disputeCaseId])
+}
+
+model CaseMessage {
+  id            String   @id @default(uuid()) @db.Uuid
+  disputeCaseId String   @db.Uuid
+  userId        String   @db.Uuid
+  body          String
+  senderRole    String
+  isInternal    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  disputeCase   DisputeCase @relation(fields: [disputeCaseId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@index([disputeCaseId, createdAt])
+}
+
+model Payment {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  activeTargetKey   String?  @unique
+  bookingId         String?  @db.Uuid
+  disputeCaseId     String?  @db.Uuid
+  amountPaise       Int
+  currency          String   @default("INR")
+  status            String   @default("CREATED")
+  gateway           String   @default("RAZORPAY")
+  gatewayOrderId    String?  @unique
+  gatewayPaymentId  String?  @unique
+  signatureVerifiedAt DateTime?
+  idempotencyKey    String   @unique
+  failureReason     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  booking           BookingRequest? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  disputeCase       DisputeCase? @relation(fields: [disputeCaseId], references: [id], onDelete: SetNull)
+  invoice           Invoice?
+  refunds           Refund[]
+  @@index([userId, status, createdAt])
+  @@index([bookingId, status])
+}
+
+model PaymentWebhookEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  eventId     String   @unique
+  eventType   String
+  payload     Json
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+  @@index([eventType, createdAt])
+}
+
+model Invoice {
+  id          String   @id @default(uuid()) @db.Uuid
+  invoiceNo   String   @unique
+  userId      String   @db.Uuid
+  bookingId   String?  @db.Uuid
+  paymentId   String   @unique @db.Uuid
+  amountPaise Int
+  currency    String   @default("INR")
+  issuedAt    DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  booking     BookingRequest? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  @@index([userId, issuedAt])
+}
+
+model Refund {
+  id             String   @id @default(uuid()) @db.Uuid
+  paymentId      String   @db.Uuid
+  amountPaise    Int
+  status         String   @default("PENDING")
+  gatewayRefundId String? @unique
+  reason         String?
+  requestedById  String?  @db.Uuid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  payment        Payment  @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  @@index([paymentId, status])
+}
+
+model Article {
+  id            String   @id @default(uuid()) @db.Uuid
+  title         String
+  slug          String   @unique
+  excerpt       String
+  bodyMarkdown  String
+  category      String
+  tags          String[] @default([])
+  readingMinutes Int     @default(4)
+  status        String   @default("DRAFT")
+  lastReviewedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  savedBy       SavedArticle[]
+  @@index([status, category, updatedAt])
+}
+
+model SavedArticle {
+  userId    String   @db.Uuid
+  articleId String   @db.Uuid
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  @@id([userId, articleId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String
+  targetType String
+  targetId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId, createdAt])
+}

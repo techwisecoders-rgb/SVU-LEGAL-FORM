@@ -1,0 +1,32 @@
+{
+  "name": "svu-developers-legal-platform",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,api -c blue,green npm:dev:web npm:dev:api",
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:api": "npm --workspace apps/api run dev",
+    "build": "npm run db:generate && npm --workspace apps/web run build && npm --workspace apps/api run build",
+    "test": "npm --workspace apps/api test",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "typecheck": "npm run db:generate && npm --workspace apps/web run lint && npm --workspace apps/api run build",
+    "predev": "npm run db:generate"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "prisma": "^7.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  }
+}
