@@ -1,13 +1,12 @@
-node_modules
-.next
-dist
+node_modules/
+.next/
+out/
+dist/
 .env
 .env.*.local
-coverage
+coverage/
 .DS_Store
 *.log
-
-# Private client records and generated build output
 .private-uploads/
-apps/api/.private-uploads/
-apps/api/src/generated/prisma/
+src/api/generated/prisma/
+.vercel/

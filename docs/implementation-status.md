@@ -23,11 +23,11 @@
 - TypeScript/TSX parsing with the installed TypeScript compiler API is rerun on all 24 TypeScript/TSX files before packaging. The changed frontend components also pass a structural TypeScript check with temporary ambient declarations; this is not a substitute for the dependency-backed project type-check.
 - CSS brace-balance, package-manifest JSON parsing, static asset presence and ZIP integrity checks are run before packaging.
 - JSON parsing of package manifests and archive integrity checks are performed before packaging. The ZIP intentionally excludes `node_modules`, local `.env` files, private uploads and generated build output. No lockfile is fabricated; once package registry access is available, run `npm install` and commit the generated `package-lock.json` for repeatable installs.
-- Focused utility tests can run without installing the web/API dependencies using the included test source and global `ts-node`, subject to the command documented in the final delivery notes.
+- The included utility tests are wired to `npm run test` and run after dependencies are installed.
 
 ## Not honestly claimed as complete or verified here
 
-- The environment could not reach `registry.npmjs.org`, so workspace dependencies could not be installed. Therefore a dependency-backed Next.js build, Prisma Client generation/schema validation, live database migration, full type checking and browser E2E tests could not be run in this environment.
+- The environment could not reach `registry.npmjs.org`, so project dependencies could not be installed. Therefore a dependency-backed Next.js build, Prisma Client generation/schema validation, live database migration, full type checking and browser E2E tests could not be run in this environment.
 - No live Razorpay merchant account, live/test keys, webhook receiver, SMTP server, production Postgres instance or ClamAV scanner is included or represented as configured.
 - No independent penetration test or legal/privacy compliance assessment has been conducted.
 - Production deployment must verify same-site/CORS/cookie settings, backups, monitoring, multi-instance rate limiting, private storage durability, malware scanning, retention, payment reconciliation and legal/tax copy.
@@ -35,3 +35,8 @@
 ## Production gate
 
 Do not accept real payments or confidential client documents until package-backed build/tests, migration review, test-mode payment/webhook cases, access-control tests, malware scanning, HTTPS and professional legal/security review are completed. No automated checklist status should be taken as legal clearance or a title guarantee.
+
+
+## Single-project deployment note
+
+The current package is structured as one root-level Next.js application. `pages/api/[...path].ts` mounts Express under `/api/*`, and `vercel.json` selects the Next.js framework. Import the repository root as one Vercel project; do not create separate frontend and API projects. Durable private document storage remains a production prerequisite on serverless hosting.

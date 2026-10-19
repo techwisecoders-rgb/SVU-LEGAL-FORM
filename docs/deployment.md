@@ -1,37 +1,46 @@
-# Deployment guide
+# Deployment Guide — Single Next.js Project
 
-## Suggested production layout
+## Intended Vercel structure
 
-- Next.js app on a supported Node.js deployment platform.
-- Express API on a compatible Node.js server/runtime.
-- Managed PostgreSQL/Supabase PostgreSQL with TLS and restricted credentials.
-- Persistent private encrypted storage or a reviewed private object-store adapter for documents.
-- SMTP/transactional email provider.
-- Razorpay merchant account and HTTPS webhook URL.
-- Centralized logs, monitoring, database backups and tested restore procedure.
+Deploy the **repository root as one Next.js project**. The Next.js App Router serves the website; `pages/api/[...path].ts` mounts the Express API behind `/api/*`. The project has one root `package.json`, one Vercel project, one environment-variable configuration page, and one deployment URL.
 
-A frontend-only static host cannot run the separate Express API. Deploy web and API independently unless they are intentionally combined behind a Node.js service. Configure exact origins in `NEXT_PUBLIC_SITE_URL` and `NEXT_PUBLIC_API_URL`.
+Do not create separate Vercel projects for `apps/web` and `apps/api`; those workspace folders are intentionally absent from this single-project edition.
 
-## Release steps
+## Vercel settings
 
-1. Generate dependencies in a registry-connected environment with `npm install`, commit the resulting `package-lock.json`, and build with the project Node.js version policy. The current source archive omits a lockfile because registry access was unavailable during generation; do not deploy until dependencies are locked and the build passes.
-2. Provision Postgres and apply `npx prisma migrate deploy`; keep production migrations under source control and review them before release.
-3. Set all server-only environment values in deployment secret management. Set `NODE_ENV=production`, site/API HTTPS origins, database URL and admin bootstrap credentials for first startup only.
-4. Configure SMTP, verify mail delivery and remove development token logging.
-5. Provision private document storage and ClamAV/vetted scanner; validate uploaded files are denied on scanner unavailability.
-6. Run end-to-end checkout with Razorpay test keys and a real signed test webhook before enabling live mode.
-7. Configure HTTPS, appropriate cookie settings, origin checks, reverse proxy, trusted IP forwarding and shared WAF/rate limiting. Do not set `TRUST_PROXY=true` behind an untrusted proxy.
-8. Configure database backup, restore testing, monitoring, alerting, error reporting, log retention and incident response.
-9. Review legal terms, privacy and document retention, case-management policies, tax treatment, invoice details and professional roles.
-10. Run the final test checklist in `tests/README.md`; keep a release record with test evidence and rollback steps.
+- Framework Preset: `Next.js`
+- Root Directory: `.` (repository root)
+- Install Command: `npm install`
+- Build Command: `npm run build`
+- Output Directory: use the Next.js default
+- Development Command: `npm run dev`
 
-## Environment keys
+The build command runs `prisma generate` followed by `next build`. Set the database environment variable in the Vercel project's build/runtime environment before deployment because Prisma's configuration validates it during generation/build.
 
-See `.env.example` for the complete list. `DATABASE_URL`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `SMTP_PASSWORD` and `ADMIN_INITIAL_PASSWORD` are private server secrets. `NEXT_PUBLIC_*` values are expected to be public configuration and must not contain secrets.
+## Required variables
 
-## Deployment caveats
+| Key | Required | Notes |
+|---|---:|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection string accessible from Vercel; never expose to client code. |
+| `ADMIN_INITIAL_EMAIL` | Recommended | One-time server-side admin bootstrap. |
+| `ADMIN_INITIAL_PASSWORD` | Recommended | Unique secret, minimum 16 characters. |
+| `NEXT_PUBLIC_SITE_URL` | Yes for custom domain | Canonical HTTPS site URL. Preview can use Vercel's automatic deployment URL. |
+| `NEXT_PUBLIC_API_URL` | No | Leave unset. API is served at the same origin under `/api`. |
+| `RAZORPAY_KEY_ID` | Optional | Use test credentials initially. |
+| `RAZORPAY_KEY_SECRET` | Optional | Server-only secret. |
+| `RAZORPAY_WEBHOOK_SECRET` | Optional | Configure the webhook URL as `https://your-domain.com/api/payments/webhook`. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | Optional | Configure email delivery; do not claim email was sent if unconfigured. |
 
-- Local filesystem uploads need persistent storage and cannot by themselves support multiple stateless API instances. Use shared private storage or route requests to one persistent file-serving node until an object-storage adapter is implemented.
-- The per-process rate limiter does not synchronize across multiple instances.
-- The site does not include a video consultation integration. Add a provider only after evaluating privacy, access controls and contracts.
-- This application has not been independently security-certified or checked for legal/tax compliance. Complete those reviews before receiving real customers.
+Add variables in this **single Vercel project's** Settings → Environment Variables. Do not put secrets in `NEXT_PUBLIC_*`. Redeploy after environment-variable changes.
+
+## Database migrations
+
+Run `npx prisma migrate deploy` from a trusted terminal or deployment job configured with the production database. Do not depend on build-time deployment side effects to mutate the production database. Review and back up the database before applying schema changes.
+
+## Critical limitations before production
+
+- The current private-document adapter writes to the local filesystem. Vercel function filesystems are ephemeral, so this is not durable across invocations. Configure a private durable object-storage adapter and secure upload/download/delete flows before accepting confidential property documents.
+- The current API caps uploads at 4 MB on Vercel due to serverless request limits. A production implementation should upload directly to private object storage using short-lived, scoped authorizations and complete malware scanning before making files available.
+- Configure a managed PostgreSQL database, email delivery, payment gateway webhooks, logging and backups. These are supporting services, but the frontend and API remain one Vercel project.
+- Use Razorpay test mode until order creation, signature verification, webhook idempotency, failure paths, refunds and reconciliation have been tested.
+- Perform an independent security and legal review before production use.

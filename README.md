@@ -1,144 +1,93 @@
-# SVU Developers Private Limited — Real Estate Legal Advisory Platform
+# SVU Developers Private Limited — Single-Project Full-Stack Website
 
-A full-stack Node.js/Next.js platform for Indian real-estate legal-assistance intake, property due-diligence workflow, paid consultations, secure customer document exchange, dispute intake and case messages, Razorpay payments, refunds, a knowledge centre and role-protected operations tooling.
-
-> **Deployment disclaimer:** This is a substantial deployable application codebase, not a legal-compliance certification or a substitute for production security review. It cannot verify title automatically and must not be presented as a licensed law practice, arbitral institution, guaranteed legal clearance or guaranteed dispute outcome. Live payments, email, malware scanning and production hosting require the operator's own approved accounts, credentials, policies and professional review.
+This is the **single-application deployment edition** of the SVU real estate legal advisory platform. It intentionally uses one Next.js project at the repository root. The public website and the Express API deploy together to one domain; do not deploy `apps/web` and `apps/api` separately.
 
 ## Architecture
 
-- `apps/web`: Next.js App Router, React, TypeScript, Tailwind CSS, Motion and Lucide icons.
-- `apps/api`: Node.js + Express JSON API, Zod input validation, server-side role checks, scrypt password hashes, opaque HTTP-only session cookies, email verification/reset tokens, private document routes, Razorpay order/signature/webhook integration, status workflows and audit events.
-- `prisma/schema.prisma`: PostgreSQL schema and initial migration for users/sessions, assessments/checklists, service pricing/slots/bookings, disputes/messages/milestones/status history, documents, payments/webhooks/invoices/refunds, articles/bookmarks and audit records.
-- `prisma/migrations`: initial PostgreSQL migration.
-- `docs`: setup, security, payment, deployment, content review and operations guidance.
-
-No Docker or Redis is required.
-
-## Requirements
-
-- Node.js 22.16.0 (or a compatible newer Node 22 release) and npm 10+
-- PostgreSQL 14+ or Supabase PostgreSQL
-- Optional: SMTP/transactional email provider
-- Optional: Razorpay test/live credentials and webhook secret
-- For production uploads: ClamAV (`clamscan`) or an equivalent reviewed malware-scanning implementation
+- **Website:** Next.js App Router, React, TypeScript, Motion and Lucide icons, with responsive service pages, the interactive property navigator, legal knowledge centre, and customer/reviewer/admin workspaces.
+- **API:** Express is mounted behind `pages/api/[...path].ts`. Requests to `/api/*` are handled by the same Vercel/Next.js project and origin, including authentication, property assessments, bookings, cases, documents, articles, admin workflows and Razorpay endpoints.
+- **Database:** PostgreSQL through Prisma 7 and the PostgreSQL driver adapter. The Prisma Client is generated into `src/api/generated/prisma/`.
+- **Local development:** `npm run dev` starts only Next.js on port 3000. The Express API is available under that same origin, for example `http://localhost:3000/api/health`.
 
 ## Run on Windows (PowerShell)
 
-1. Extract the ZIP and open `svu-developers-legal-platform` in VS Code.
-2. Create the local environment file:
-
-   ```powershell
-   Copy-Item .env.example .env
-   ```
-
-3. Edit `.env` before running. Set `DATABASE_URL` to your local/PostgreSQL connection. Change `ADMIN_INITIAL_EMAIL` and replace the placeholder `ADMIN_INITIAL_PASSWORD` with a unique random password of at least 16 characters. Do not put secrets in `NEXT_PUBLIC_*` variables.
-4. Install packages (internet is required the first time):
+1. Install Node.js 22 or newer and PostgreSQL (or create a PostgreSQL database with a managed provider).
+2. Copy `.env.example` to `.env` and edit the values, especially `DATABASE_URL`, `ADMIN_INITIAL_EMAIL`, and `ADMIN_INITIAL_PASSWORD`.
+3. In the project root, run:
 
    ```powershell
    npm install
-   ```
-
-5. Generate Prisma Client and apply the included initial migration:
-
-   ```powershell
    npm run db:generate
-   npx prisma migrate deploy
-   ```
-
-   For a new local database where you intend to develop schema changes, you can use `npm run db:migrate -- --name init` instead of `migrate deploy`; do not run both initialization paths against the same database.
-
-6. Seed script is intentionally non-destructive and adds no fake customers, legal credentials or transaction records:
-
-   ```powershell
+   npm run db:deploy
    npm run db:seed
-   ```
-
-7. Start the web frontend and API together. The root `predev` lifecycle automatically runs `npm run db:generate` first, so the Prisma client import under `apps/api/src/generated/prisma/` exists before the API starts:
-
-   ```powershell
    npm run dev
    ```
 
-   If you start the API directly with `npm --workspace apps/api run dev`, first run `npm run db:generate` from the repository root.
+4. Open `http://localhost:3000`.
 
-8. Open `http://localhost:3000`. The API health endpoint is `http://localhost:4000/health`. The API will create the initial admin once from `ADMIN_INITIAL_EMAIL`/`ADMIN_INITIAL_PASSWORD` if no account already exists at that email. The API will not silently promote an existing user.
+For a brand-new local database, `npm run db:migrate -- --name init` can create a development migration; for the included initial schema, `npm run db:deploy` applies the existing migration.
 
-After the first administrator account is successfully created, remove `ADMIN_INITIAL_PASSWORD` from the deployment environment and restart the API. Create reviewer accounts through the protected Users & Roles screen by changing a normal account's role to `REVIEWER`.
+## Deploy as ONE project on Vercel
 
-### Available root commands
+1. Push this folder to GitHub and import that repository into Vercel.
+2. Keep **Root Directory** set to the repository root (`.`). This ZIP has no `apps/` directory or workspace package manifests. If you are updating your existing GitHub repository, delete the old `apps/` folder completely before committing; leaving the old `apps/api/package.json` and `apps/web/package.json` in the repository can make Vercel continue to detect both apps.
+3. Select **Next.js** as the Framework Preset. Vercel should detect a single Next.js application.
+4. Use the project defaults or set:
+   - Install Command: `npm install`
+   - Build Command: `npm run build`
+   - Output Directory: leave the Next.js default; do not set a custom `public` or static output folder.
+5. Add the environment variables below to this single Vercel project. Choose Production, Preview, and Development scopes as needed. Do not paste the whole `.env` file into a frontend-only app; add each `KEY` and `VALUE` in this one project's Environment Variables UI.
+6. Deploy. The site and `/api/*` endpoints share one domain and one deployment.
+7. Before inviting customers, run `npx prisma migrate deploy` against the production database from a trusted terminal/CI job, then verify login, email, booking and payments in Preview using test credentials.
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Run Next.js and API concurrently |
-| `npm run dev:web` | Frontend only |
-| `npm run dev:api` | API only |
-| `npm run build` | Build frontend then TypeScript API |
-| `npm run typecheck` | Run frontend TypeScript check and API compile |
-| `npm test` | Run security utility tests |
-| `npm run db:generate` | Generate Prisma Client |
-| `npx prisma migrate deploy` | Apply committed migrations in deployment |
-| `npm run db:migrate -- --name change_name` | Create/apply a development migration |
-| `npm run db:seed` | Run the safe seed script |
+### Required Vercel environment variables
 
-## Advanced client-facing experience
+- `DATABASE_URL` — reachable PostgreSQL connection string. Keep it server-side; do not prefix it with `NEXT_PUBLIC_`.
+- `ADMIN_INITIAL_EMAIL` — the intended initial administrator email.
+- `ADMIN_INITIAL_PASSWORD` — unique secret with at least 16 characters. Never use the sample value.
+- `NEXT_PUBLIC_SITE_URL` — the canonical production URL, e.g. `https://your-domain.com`. For Preview, either set the preview URL or allow the code to use Vercel's deployment URL.
 
-The home page is designed as an interactive product experience, not only a static marketing page. It includes:
+**Do not set `NEXT_PUBLIC_API_URL` to a separate API host.** It is optional; leave it unset so browser requests use same-origin `/api/...` URLs. If the environment UI contains an old `NEXT_PUBLIC_API_URL` pointing to port 4000 or another deployment, remove it from this project and redeploy.
 
-- A property-preparation navigator: select property type, transaction stage and state to generate a local preparation checklist. The output is explicitly informational and does not claim that checks have been performed.
-- A searchable, category-filtered service directory.
-- An illustrative customer-workspace preview with interactive Checklist, Documents and Timeline tabs. Its example status and document rows are labeled as demo content, not live customer records.
-- A locally interactive checklist with progress, plus a step-by-step workflow explorer.
-- Detailed service/knowledge pages with a designed hero, review considerations, next-step CTA, related resources and legal limitations.
-- Responsive design for desktop, tablet and mobile, a restrained navy/ivory/gold system, and SVG/ICO brand icons.
+Optional variables:
 
-The demo checklist and workspace preview are front-end demonstrations. They do not write data to the database; actual submitted assessments, bookings, uploads, payments and cases use the authenticated API workflows described below.
+- Razorpay test credentials: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`; keep `PAYMENTS_ENABLED=false` until test-mode order creation, signature verification and webhook delivery have all been tested.
+- Email: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`.
+- Security: `SESSION_COOKIE_SAMESITE`, `TRUST_PROXY` (normally `false` unless you have reviewed the proxy configuration), `MALWARE_SCAN_REQUIRED`, `CLAMSCAN_PATH`.
+- `NEXT_PUBLIC_API_URL` should be absent or empty for this single-origin setup.
 
-## Public pages and workflows
+## Vercel deployment limitations to resolve before production use
 
-- Branded homepage, responsive header/navigation, legal services index, long-form service pages, articles and FAQs, contact, pricing, property check, consultation booking, dispute submission, case tracking, and policy/disclaimer pages.
-- The custom line-trail effect supports pointer/touch input and respects reduced-motion preferences.
-- Article content is admin-managed and must be reviewed before publication. Starter educational snippets are generic; they are not jurisdiction-specific legal advice.
-- Property checks record evidence, sources, findings, missing information and next steps. The generated text summary explicitly states that it is not a verified title certificate or final legal opinion.
+Vercel runs API endpoints as serverless functions. Its local filesystem is ephemeral, and the function's writable `/tmp` storage is not a durable document store. This app's included local/private-file adapter is suitable for local development only. Before accepting confidential property documents on Vercel, implement and configure durable **private object storage** (for example a private Supabase Storage bucket or another encrypted object-storage provider) with authorization, malware scanning, retention and audit controls. Do not work around this by storing documents under `public/`.
 
-## Customer security features
+Vercel serverless request limits also mean large multipart document uploads need a direct-to-private-object-storage upload flow; the API caps an incoming upload at 4 MB when `VERCEL` is set. Do not represent document upload as production-ready until durable storage and malware scanning have been configured and tested.
 
-- Account registration/login, hashed passwords, opaque database-backed sessions stored in an HTTP-only cookie, logout/revocation, email verification, password reset and account password change.
-- Customer dashboard for own assessments, bookings, disputes, case messages, uploaded files, invoices, payments, bookmarks and refund requests.
-- Authorization checks use database relationships instead of trusting customer-supplied IDs.
-- Document uploads accept PDF/JPEG/PNG after type signature checking, store files outside the public web directory with restrictive permissions, record SHA-256, restrict downloads by owner/assigned reviewer/admin, and write access audit events. Production uploads are rejected unless malware scanning is available and passes.
-- Case messages distinguish customer-visible messages from staff-only internal notes; assigned reviewers can manage milestones, findings, and communications in `/reviewer`.
+Other external integrations remain their own services/credentials (PostgreSQL, email delivery and Razorpay), but they do **not** require separate Vercel frontend/API projects.
 
-## Razorpay setup (test mode first)
+## Useful commands
 
-1. Create/verify the merchant account in Razorpay and use its **test** credentials first.
-2. Set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` and `PAYMENTS_ENABLED=true` in the **API server's** private environment. The key secret and webhook secret must never be added to the browser bundle.
-3. Register the webhook URL `https://YOUR-API-DOMAIN/api/payments/webhook` in Razorpay. Choose at least payment captured, order paid, payment failed and refund lifecycle events supported by the implementation. Copy the webhook secret into the server environment.
-4. Test successful checkout, failure, duplicate webhook delivery, signature rejection, delayed capture, cancellation and refund reconciliation with Razorpay test cards/UPI methods.
-5. Use only after the account is approved, policies/tax/invoice content are reviewed, HTTPS is enabled and a qualified security review is complete should live keys be configured.
+```powershell
+npm run dev
+npm run build
+npm run start
+npm run test
+npm run typecheck
+npm run db:generate
+npm run db:migrate -- --name init
+npm run db:deploy
+npm run db:seed
+```
 
-Payment amounts are read from server-side booking/case records in integer paise; the API creates orders with Razorpay and independently validates checkout HMAC, order/payment IDs, amounts, currency and captured state. Signed webhook events are retained for idempotency/audit. If gateway credentials are absent, payment requests return a clear disabled/configuration response—no fake payment success is emitted.
+`npm run build` generates Prisma Client first and then builds the Next.js application. A successful build is not proof that live database, SMTP, object storage, or Razorpay integrations are configured.
 
-See [`docs/payment-setup.md`](docs/payment-setup.md).
+## Security notes
 
-## Email and file storage
+- No production credentials are included. Never commit `.env`.
+- Passwords are hashed; browser sessions use HTTP-only cookies and server-side session records.
+- API validation and role/ownership checks are enforced on the server.
+- Payment amounts are calculated server-side; gateway signatures and webhooks are verified.
+- Property checklists record evidence; they do not guarantee title, safety, arbitrability or legal outcomes.
+- All actual legal findings need qualified review and source/date evidence.
+- The seed script intentionally does not generate fake users, property findings, customer data, payments or official credentials.
 
-- Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` and `MAIL_FROM` to enable email delivery. Without SMTP, development verification/reset links are logged in the API terminal; do not use this fallback in production.
-- `PRIVATE_UPLOAD_DIR` defaults to an app-private directory outside `apps/web/public`. For production, use a persistent private disk with encrypted backups, restrictive access, access logging and a documented retention/deletion process. Do not horizontally scale with local-only storage unless requests are pinned to the same durable storage; a private object-storage adapter is a future deployment integration.
-- With `NODE_ENV=production`, ClamAV scanning is required by default. Install ClamAV and configure `CLAMSCAN_PATH` (or provide a vetted scanner before changing `MALWARE_SCAN_REQUIRED`).
-
-## Important notes before going live
-
-- Configure `NEXT_PUBLIC_SITE_URL` and `NEXT_PUBLIC_API_URL` to the exact HTTPS origins. API CORS and cookie-origin checks reject unconfigured browser origins. For production cross-origin deployment, configure secure cookies and CORS intentionally; a same-site frontend/API deployment is simpler.
-- Use HTTPS only in production; `Secure` cookies depend on production mode. Configure `TRUST_PROXY=true` only behind a trusted, correctly configured proxy.
-- Set a proper production database, connection limits, backup and recovery plan, monitoring and log retention. The included in-memory rate limiter is per API process; add a gateway/WAF/shared rate-limiter for multi-instance deployments.
-- Configure public website contact/social details through the code/site settings as applicable; do not publish fake company credentials, office addresses, advocate details, awards, testimonials or outcomes.
-- Have a qualified Indian legal professional review all legal copy, state-specific steps, arbitration wording, Terms, privacy/data retention, cancellation/refund rules and the scope of each paid service. Configure tax treatment and invoice format with an accountant.
-- The site is not a substitute for qualified review, nor an automated title-verification engine. A dispute intake does not mean a matter is arbitrable or that the company can appoint an arbitrator/act as a tribunal.
-
-## Test and build status
-
-The repository contains focused unit tests for password hashing, token hashing, constant-time comparisons and HMAC calculation. Run `npm test`, `npm run typecheck` and `npm run build` in an environment with dependencies installed and a configured Prisma client. Registry access failed while preparing this archive, so no `node_modules` or package lock is included and the Next.js/Prisma dependency-backed production build could not be executed here. The final source tree is syntax-parsed and the self-contained security utility tests are executed, but a successful dependency-backed build should not be assumed until those commands pass in your environment.
-
-See `docs/implementation-status.md` for the tested boundaries and remaining production readiness work.
-#   S V U - L E G A L - F O R M  
- 
+See `docs/` for architecture, security, payments, deployment, admin operation, legal-content review and the client-demo guide.
